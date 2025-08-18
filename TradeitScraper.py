@@ -108,7 +108,7 @@ class TradeitScraper:
                     group_ids = (str(item_data.get('groupId', -1)) for item_data in grouped_items)
                         
                     for id in group_ids:
-                        items_url = f'https://tradeit.gg/api/v2/inventory/data?gameId=730&offset=0&limit=500&sortType=Price+-+high&searchValue=&minPrice=5&maxPrice=10&minFloat=0&maxFloat=1&sticker=true&showTradeLock=true&onlyTradeLock=true&colors=&showUserListing=true&stickerName=&tradeLockDays[]=7&tradeLockDays[]=8&context=trade&fresh=true&groupId={id}&isForStore=0'
+                        items_url = f'https://tradeit.gg/api/v2/inventory/data?gameId=730&offset=0&limit=500&sortType=Price+-+high&searchValue=&minPrice={self.skin_min_price}&maxPrice={self.skin_max_price}&minFloat=0&maxFloat=1&sticker=true&showTradeLock=true&onlyTradeLock=true&colors=&showUserListing=true&stickerName=&tradeLockDays[]=7&tradeLockDays[]=8&context=trade&fresh=true&groupId={id}&isForStore=0'
                         items_response = requests.get(items_url, headers=self.headers)
                         #print(items_url)
                         time.sleep(random.uniform(0.7, 1.7))  # Random sleep to avoid rate limiting

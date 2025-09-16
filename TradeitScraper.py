@@ -1,11 +1,14 @@
 import asyncio
-import aiohttp
 import random
 import os
 import logging
 
+from aiohttp import ClientSession, ClientTimeout
 from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
+from typing import Dict, List
+
+from SeenItemsDB import SeenDB
 
 
 class TradeitScraper:
@@ -50,8 +53,10 @@ class TradeitScraper:
         self.logger.setLevel(logging.INFO)
         self.logger.addHandler(self.handler)
 
+        self.db = SeenDB(path='SeenItems.db', logger=self.logger)
 
-    async def send_img_with_caption(self, session, img_path, message):
+
+    async def send_img_with_caption(self, session: ClientSession, img_path: str, message: str):
         await asyncio.sleep(random.uniform(0.3, 0.5))
         endpoint = 'sendMessage'
         payload = {
@@ -76,7 +81,7 @@ class TradeitScraper:
                 self.logger.error(f"Telegram send failed, status code: {response.status}\n{text}\n{message}\n{img_path}")
             #self.logger.info(f"Sent to Telegram: {message}, with url: {url}")
 
-    async def lookup_for_stickers(self, stickers, stickers_names):
+    async def lookup_for_stickers(self, stickers: List[Dict], stickers_names: List[str]) -> bool:
         """
         This function checks if any of the stickers in the provided list match the names in stickers_names.
         If a match is found, it returns True; otherwise, it returns False.
@@ -88,23 +93,23 @@ class TradeitScraper:
                     return True
         return False
 
-    async def fetch(self, session, url):
+    async def fetch(self, session: ClientSession, url: str) -> Dict:
         await asyncio.sleep(random.uniform(0.3, 1))
         async with self.sem:
             try:
-                async with session.get(url, headers=self.headers, timeout=30) as response:
+                async with session.get(url, headers=self.headers, timeout=ClientTimeout(total=30)) as response:
                     if response.status!=200:
                         text = await response.text()
-                        self.logger.error(f'GET {response.status}, something went wrong.\n{text}')
-                        return None
+                        #self.logger.error(f'GET {response.status}, something went wrong.\n{text}')
+                        raise ValueError(f'Unexpected satatus code: {response.status}, {text}')
                     #self.logger.info(f'GET {response.status}, Fetching {url}')
                     return await response.json()
 
             except Exception as e:
-                self.logger.error(f'An error occured while fetching {url},\nMessage: {e}')
-        return None
+                #self.logger.error(f'An error occured while fetching {url},\nMessage: {e}')
+                raise ValueError(f'An error occured while fetching {url},\nMessage: {e}')
     
-    async def worker_image(self, session):
+    async def worker_image(self, session: ClientSession):
         while True:
             alert = await self.q_images.get()
 
@@ -116,7 +121,7 @@ class TradeitScraper:
 
 
 
-    async def worker_item(self, session):
+    async def worker_item(self, session: ClientSession):
         while True:
             # Extracting item details
             item = await self.q_items.get()
@@ -155,7 +160,7 @@ class TradeitScraper:
             self.q_items.task_done()
 
 
-    async def worker_group(self, session):
+    async def worker_group(self, session: ClientSession):
         while True:
             group_id = await self.q_groups.get()
 
@@ -176,7 +181,7 @@ class TradeitScraper:
 
         self.logger.info('Application started')
         
-        async with aiohttp.ClientSession() as session:
+        async with ClientSession() as session:
             while True:
                 url = f'https://tradeit.gg/api/v2/inventory/data?gameId=730&offset={self.start}&limit={self.limit}&sortType=Price+-+high&searchValue=&minPrice={self.skin_min_price}&maxPrice={self.skin_max_price}&minFloat=0&maxFloat=1&sticker=true&showTradeLock=true&onlyTradeLock=true&colors=&showUserListing=true&stickerName=&tradeLockDays[]=7&tradeLockDays[]=8&context=trade&fresh=true&isForStore=0'
 
@@ -188,7 +193,7 @@ class TradeitScraper:
                     #self.logger.info(f"Found group ID: {group_id}")
                     await self.q_groups.put(group_id)
                 if not grouped_items:
-                    self.logger.info("No items found in the response.")
+                    self.logger.info("No more grouped items in the response")
                     break
 
                 #await asyncio.sleep(random.uniform(5, 10))

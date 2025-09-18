@@ -9,6 +9,7 @@ class SeenDB:
         try:
             self.conn = sqlite3.connect(path)
             self.create_table()
+            self.cleanup()
         except sqlite3.Error as error:
             self.logger.error(f'Error occured, {error}')
 
@@ -27,7 +28,7 @@ class SeenDB:
                             INSERT INTO scrapedItems (itemID) VALUES(?)
                             ''', (id,))
             
-    async def isInDB(self, id: str):
+    async def isInDB(self, id: str) -> bool:
         with self.conn:
             result = self.conn.execute('''
                                             SELECT itemID from scrapedItems where itemID like ?
@@ -37,10 +38,12 @@ class SeenDB:
     def cleanup(self):
         with self.conn:
             self.conn.execute('''
-                                DELETE *
+                                DELETE
                                 FROM scrapedItems
                                 WHERE creation_date < datetime('now', '-3 days');
                               ''')
+    async def close(self):
+        self.conn.close()
         
         
     

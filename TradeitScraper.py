@@ -1,27 +1,31 @@
 import asyncio
 import random
 import os
-import logging
 
 from aiohttp import ClientSession, ClientTimeout
 from dotenv import load_dotenv
-from logging.handlers import RotatingFileHandler
+
 from typing import Dict, List
 
 from SeenItemsDB import SeenDB
 
 
 class TradeitScraper:
-    def __init__(self, skin_min_price, skin_max_price, stickers_to_lookup):
+    def __init__(self, skin_min_price, skin_max_price, stickers_to_lookup, logger):
         self.start = 0
         self.limit = 120
         self.skin_min_price = skin_min_price
         self.skin_max_price = skin_max_price
         self.stickers_to_lookup = stickers_to_lookup
+        self.logger = logger
+
+        # Env
 
         load_dotenv()
         self.telegram_token = os.environ.get('TOKEN')
         self.telegram_chat_id = os.environ.get('CHAT_ID')
+
+        # Headers
 
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
@@ -34,24 +38,15 @@ class TradeitScraper:
             #'Upgrade-Insecure-Requests': '1'
         }
 
+        # Asyncio
+
         self.q_groups = asyncio.Queue()
         self.q_items = asyncio.Queue()
         self.q_images = asyncio.Queue()
 
         self.sem = asyncio.Semaphore(3)
 
-        self.handler = RotatingFileHandler(
-            'logs.log',
-            maxBytes=5*1024*1024,  # 5 MB per file
-            backupCount=3          # Keep last 3 backups
-        )
-
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        self.handler.setFormatter(formatter)
-
-        self.logger = logging.getLogger("TradeitScraper")
-        self.logger.setLevel(logging.INFO)
-        self.logger.addHandler(self.handler)
+        # Database
 
         self.db = SeenDB(path='SeenItems.db', logger=self.logger)
 
@@ -100,7 +95,7 @@ class TradeitScraper:
                 async with session.get(url, headers=self.headers, timeout=ClientTimeout(total=30)) as response:
                     if response.status!=200:
                         text = await response.text()
-                        #self.logger.error(f'GET {response.status}, something went wrong.\n{text}')
+                        self.logger.error(f'GET {response.status}, something went wrong.\n{text}')
                         raise ValueError(f'Unexpected satatus code: {response.status}, {text}')
                     #self.logger.info(f'GET {response.status}, Fetching {url}')
                     return await response.json()
@@ -157,6 +152,7 @@ class TradeitScraper:
                 image_path = image_data.get('front', 'No image found')
                 alert = {'img': image_path, 'msg': msg}  
                 await self.q_images.put(alert)
+
             self.q_items.task_done()
 
 
@@ -173,7 +169,10 @@ class TradeitScraper:
             for item in items:
                 # log
                 #self.logger.info(f"Processing item ID: {item.get('id', 'Unknown')} from group ID: {group_id}")
-                await self.q_items.put(item)
+                id = item.get('id', 'Unknown')
+                if not await self.db.isInDB(id):
+                    await self.db.add_item(id)
+                    await self.q_items.put(item)
             self.q_groups.task_done()
 
 
@@ -193,7 +192,7 @@ class TradeitScraper:
                     #self.logger.info(f"Found group ID: {group_id}")
                     await self.q_groups.put(group_id)
                 if not grouped_items:
-                    self.logger.info("No more grouped items in the response")
+                    #self.logger.info("No more grouped items in the response")
                     break
 
                 #await asyncio.sleep(random.uniform(5, 10))
@@ -223,6 +222,8 @@ class TradeitScraper:
                 for _ in range(len(tasks)):
                     await q.put(None)
 
+
             await asyncio.gather(*tasks)
+            await self.db.close()
 
             

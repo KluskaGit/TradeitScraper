@@ -4,6 +4,7 @@ import os
 
 from aiohttp import ClientSession, ClientTimeout
 from dotenv import load_dotenv
+from asyncio import Task
 
 from typing import Dict, List
 
@@ -131,7 +132,7 @@ class TradeitScraper:
             group_id = item.get('groupId', -1)
             stickers = item.get('stickers', [])
 
-            if await self.lookup_for_stickers(stickers, self.stickers_to_lookup):
+            if not await self.db.isInDB(id) and await self.lookup_for_stickers(stickers, self.stickers_to_lookup):
                 msg = f'<b>Name:</b> {name},\n<b>Price:</b> {price/100}$, <b>Store Price:</b> {store_price/100}$\n<b>Stickers:</b>'
 
                 # Extracting sticker details
@@ -152,6 +153,7 @@ class TradeitScraper:
                 image_path = image_data.get('front', 'No image found')
                 alert = {'img': image_path, 'msg': msg}  
                 await self.q_images.put(alert)
+                await self.db.add_item(id)
 
             self.q_items.task_done()
 
@@ -169,10 +171,7 @@ class TradeitScraper:
             for item in items:
                 # log
                 #self.logger.info(f"Processing item ID: {item.get('id', 'Unknown')} from group ID: {group_id}")
-                id = item.get('id', 'Unknown')
-                if not await self.db.isInDB(id):
-                    await self.db.add_item(id)
-                    await self.q_items.put(item)
+                await self.q_items.put(item)
             self.q_groups.task_done()
 
 
@@ -201,7 +200,7 @@ class TradeitScraper:
                 self.limit = 160
             
             # worker startup
-            tasks = []
+            tasks: List[Task] = []
             ##########
             # TODO
             # optimize number of workers to the min/max price
@@ -222,8 +221,12 @@ class TradeitScraper:
                 for _ in range(len(tasks)):
                     await q.put(None)
 
-
-            await asyncio.gather(*tasks)
+            try:
+                await asyncio.gather(*tasks)
+            except ValueError as e:
+                self.logger.error(f'Error, stopping scraper, {e}')
+                for task in tasks:
+                    task.cancel()
             await self.db.close()
 
             

@@ -24,7 +24,11 @@ class TradeitScraper:
 
         load_dotenv()
         self.telegram_token = os.environ.get('TOKEN')
+        if not self.telegram_token:
+            raise ValueError("No TOKEN env variable found")
         self.telegram_chat_id = os.environ.get('CHAT_ID')
+        if not self.telegram_chat_id:
+            raise ValueError("No CHAT_ID env variable found")
 
         # Headers
 
@@ -208,9 +212,9 @@ class TradeitScraper:
             for _ in range(1):
                 tasks.append(asyncio.create_task(self.worker_group(session)))
 
-            for _ in range(2):
-                tasks.append(asyncio.create_task(self.worker_item(session)))
             for _ in range(4):
+                tasks.append(asyncio.create_task(self.worker_item(session)))
+            for _ in range(1):
                 tasks.append(asyncio.create_task(self.worker_image(session)))
             
             await self.q_groups.join()

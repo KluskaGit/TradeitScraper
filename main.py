@@ -1,12 +1,12 @@
 import asyncio
-from TradeitScraper import TradeitScraper
+from scraper.TradeitScraper import TradeitScraper
 
 import logging
 from logging.handlers import RotatingFileHandler
 
 if __name__ == "__main__":
-    minPrice = 10
-    maxPrice = 12
+    minPrice = 2
+    maxPrice = 30
 
     # Logger
     handler = RotatingFileHandler(

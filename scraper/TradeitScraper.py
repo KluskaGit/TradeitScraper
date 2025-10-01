@@ -8,7 +8,7 @@ from asyncio import Task
 
 from typing import Dict, List
 
-from SeenItemsDB import SeenDB
+from scraper.database.SeenItemsDB import SeenDB
 
 
 class TradeitScraper:

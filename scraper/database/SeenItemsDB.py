@@ -1,5 +1,4 @@
 import sqlite3
-import time
 from logging import Logger
 
 class SeenDB:

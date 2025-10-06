@@ -3,15 +3,14 @@ __pycache__/
 .python-version
 .venv/
 
-
 # Token
 .env
-
-# Test files
-tests.py
 
 # Logs
 *.log
 
 # Database
 *.db
+
+# Run file
+run.bat

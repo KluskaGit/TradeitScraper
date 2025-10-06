@@ -94,7 +94,7 @@ class TradeitScraper:
         return False
 
     async def fetch(self, session: ClientSession, url: str) -> Dict:
-        await asyncio.sleep(random.uniform(0.3, 1))
+        await asyncio.sleep(random.uniform(9, 15))
         async with self.sem:
             try:
                 async with session.get(url, headers=self.headers, timeout=ClientTimeout(total=30)) as response:

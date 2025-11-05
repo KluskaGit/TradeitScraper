@@ -5,8 +5,8 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 if __name__ == "__main__":
-    minPrice = 2
-    maxPrice = 30
+    minPrice = 5
+    maxPrice = 10
 
     # Logger
     handler = RotatingFileHandler(

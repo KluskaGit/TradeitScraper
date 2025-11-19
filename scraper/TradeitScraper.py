@@ -46,7 +46,8 @@ class TradeitScraper:
 
         # Headers
 
-        self.headers = self.config['scraper']['headers']
+        self.headers: dict = self.config['scraper']['headers']
+        self.user_agent: list[str] = self.headers.pop('User-Agent')
 
         # Asyncio
 
@@ -54,12 +55,14 @@ class TradeitScraper:
         self.q_items = asyncio.Queue()
         self.q_images = asyncio.Queue()
 
-        self.sem = asyncio.Semaphore(3)
+        self.semaphore = asyncio.Semaphore(3)
 
         # Database
 
         self.db = SeenDB(path='SeenItems.db', logger=self.logger)
-
+    
+    async def create_headers(self) -> None:
+        self.headers['User-Agent'] = random.choice(self.user_agent)
 
     async def send_img_with_caption(self, session: ClientSession, img_path: str, message: str) -> None:
         await asyncio.sleep(random.uniform(0.3, 0.5))
@@ -79,7 +82,7 @@ class TradeitScraper:
 
         url = f'https://api.telegram.org/bot{self.telegram_token}/{endpoint}'
         
-        
+        await self.create_headers()
         async with session.post(url, data=payload, headers=self.headers) as response:
             if response.status != 200:
                 text = await response.text()
@@ -100,7 +103,9 @@ class TradeitScraper:
 
     async def fetch(self, session: ClientSession, url: str) -> Dict:
         await asyncio.sleep(random.uniform(self.min_delay, self.max_delay))
-        async with self.sem:
+        await self.create_headers()
+        
+        async with self.semaphore:
             async with session.get(url, headers=self.headers, timeout=ClientTimeout(total=30)) as response:
                 if response.status!=200:
                     text = await response.text()

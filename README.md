@@ -44,11 +44,19 @@ Titan
 iBUYPOWER
 ```
 
-3. (Optional) Adjust price range in `main.py`:
-```python
-minPrice = 5   # Minimum price in USD
-maxPrice = 10  # Maximum price in USD
+3. (Optional) Adjust price range in `appconfig.yaml`:
+```yaml
+  skin_min_price: 5   # Minimum price in USD
+  skin_max_price: 10  # Maximum price in USD
 ```
+
+4. (Optional) Adjust request delay settings in `appconfig.yaml`:
+```yaml
+  min_delay: 2  # Minimum delay between requests in seconds
+  max_delay: 4  # Maximum delay between requests in seconds
+```
+
+5. (Optional) Modify user-agent strings in `appconfig.yaml` to include more variety if needed.
 
 ## Usage
 

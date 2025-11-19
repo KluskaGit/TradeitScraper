@@ -14,7 +14,7 @@ A Python-based web scraper for monitoring CS2 skin listings on tradeit.gg. The s
 ## Requirements
 
 - Python 3.13+
-- uv package manager
+- [uv package manager](https://docs.astral.sh/uv/getting-started/installation/)
 
 ## Installation
 

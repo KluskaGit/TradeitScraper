@@ -101,18 +101,13 @@ class TradeitScraper:
     async def fetch(self, session: ClientSession, url: str) -> Dict:
         await asyncio.sleep(random.uniform(self.min_delay, self.max_delay))
         async with self.sem:
-            try:
-                async with session.get(url, headers=self.headers, timeout=ClientTimeout(total=30)) as response:
-                    if response.status!=200:
-                        text = await response.text()
-                        self.logger.error(f'GET {response.status}, something went wrong.\n{text}')
-                        raise ValueError(f'Unexpected satatus code: {response.status}, {text}')
-                    #self.logger.info(f'GET {response.status}, Fetching {url}')
-                    return await response.json()
-
-            except Exception as e:
-                #self.logger.error(f'An error occured while fetching {url},\nMessage: {e}')
-                raise ValueError(f'An error occured while fetching {url},\nMessage: {e}')
+            async with session.get(url, headers=self.headers, timeout=ClientTimeout(total=30)) as response:
+                if response.status!=200:
+                    text = await response.text()
+                    self.logger.error(f'GET {response.status}, something went wrong.\n{text}')
+                    raise ValueError(f'Unexpected satatus code: {response.status}, {text}')
+                #self.logger.info(f'GET {response.status}, Fetching {url}')
+                return await response.json()
     
     async def worker_image(self, session: ClientSession):
         while True:
@@ -122,12 +117,9 @@ class TradeitScraper:
                 self.q_images.task_done()
                 break
 
-            try:
-                await self.send_img_with_caption(session, alert['img'], alert['msg'])
-            except Exception as e:
-                self.logger.error(f"Error in worker_image: {e}", exc_info=True)
-            finally:
-                self.q_images.task_done()
+            await self.send_img_with_caption(session, alert['img'], alert['msg'])
+
+            self.q_images.task_done()
 
 
 
@@ -140,39 +132,31 @@ class TradeitScraper:
                 self.q_items.task_done()
                 break
 
-            try:
-                id = item.get('id', 'Unknown')
-                name = item.get('name', 'Unknown')
-                price = item.get('price', 0)
-                store_price = item.get('storePrice', 0)
-                stickers = item.get('stickers', [])
+            id = item.get('id', 'Unknown')
+            name = item.get('name', 'Unknown')
+            price = item.get('price', 0)
+            store_price = item.get('storePrice', 0)
+            stickers = item.get('stickers', [])
+            if not await self.db.isInDB(id) and await self.lookup_for_stickers(stickers, self.stickers_to_lookup):
+                msg = f'<b>Name:</b> {name},\n<b>Price:</b> {price/100}$, <b>Store Price:</b> {store_price/100}$\n<b>Stickers:</b>'
+                # Extracting sticker details
+                for sticker in stickers:
+                    sticker_name = sticker.get('name', 'Unknown')
+                    #sticker_link = sticker.get('link', 'No link')
+                    sticker_price = sticker.get('price', 0)
+                    msg+=(f'\n      {sticker_name}, <b>Price:</b> {sticker_price/100}$')
+                url = f'https://tradeit.gg/api/v2/inventory/csgo-full-img?assetId={id}'
+                image_json = await self.fetch(session, url=url)
+                image_data = image_json.get('data', {})
+                    
+                if not  image_data:
+                    self.logger.info(f"No image data found for item ID {id}")
+                image_path = image_data.get('front', 'No image found')
+                alert = {'img': image_path, 'msg': msg}  
+                await self.q_images.put(alert)
+                await self.db.add_item(id)
 
-                if not await self.db.isInDB(id) and await self.lookup_for_stickers(stickers, self.stickers_to_lookup):
-                    msg = f'<b>Name:</b> {name},\n<b>Price:</b> {price/100}$, <b>Store Price:</b> {store_price/100}$\n<b>Stickers:</b>'
-
-                    # Extracting sticker details
-                    for sticker in stickers:
-
-                        sticker_name = sticker.get('name', 'Unknown')
-                        #sticker_link = sticker.get('link', 'No link')
-                        sticker_price = sticker.get('price', 0)
-                        msg+=(f'\n      {sticker_name}, <b>Price:</b> {sticker_price/100}$')
-
-                    url = f'https://tradeit.gg/api/v2/inventory/csgo-full-img?assetId={id}'
-                    image_json = await self.fetch(session, url=url)
-                    image_data = image_json.get('data', {})
-                        
-                    if not  image_data:
-                        self.logger.info(f"No image data found for item ID {id}")
-
-                    image_path = image_data.get('front', 'No image found')
-                    alert = {'img': image_path, 'msg': msg}  
-                    await self.q_images.put(alert)
-                    await self.db.add_item(id)
-            except Exception as e:
-                self.logger.error(f"Error in worker_item processing item {item.get('id', 'Unknown')}: {e}", exc_info=True)
-            finally:
-                self.q_items.task_done()
+            self.q_items.task_done()
 
 
     async def worker_group(self, session: ClientSession):
@@ -183,19 +167,16 @@ class TradeitScraper:
                 self.q_groups.task_done()
                 break
             
-            try:
-                items_url = f'https://tradeit.gg/api/v2/inventory/data?gameId=730&offset=0&limit=500&sortType=Price+-+high&searchValue=&minPrice={self.skin_min_price}&maxPrice={self.skin_max_price}minFloat=0&maxFloat=1&sticker=true&showTradeLock=true&onlyTradeLock=true&colors=&showUserListing=true&stickerName=&tradeLockDays[]=7&tradeLockDays[]=8&context=trade&fresh=true&groupId={group_id}&isForStore=0'
-                site_data = await self.fetch(session, url=items_url)
-                items = site_data.get('items', [])
 
-                for item in items:
-                    # log
-                    #self.logger.info(f"Processing item ID: {item.get('id', 'Unknown')} from group ID: {group_id}")
-                    await self.q_items.put(item)
-            except Exception as e:
-                self.logger.error(f"Error in worker_group processing group {group_id}: {e}", exc_info=True)
-            finally:
-                self.q_groups.task_done()
+            items_url = f'https://tradeit.gg/api/v2/inventory/data?gameId=730&offset=0&limit=500&sortType=Price+-+high&searchValue=&minPrice={self.skin_min_price}&maxPrice={self.skin_max_price}minFloat=0&maxFloat=1&sticker=true&showTradeLock=true&onlyTradeLock=true&colors=&showUserListing=true&stickerName=&tradeLockDays[]=7&tradeLockDays[]=8&context=trade&fresh=true&groupId={group_id}&isForStore=0'
+            site_data = await self.fetch(session, url=items_url)
+            items = site_data.get('items', [])
+            for item in items:
+                # log
+                #self.logger.info(f"Processing item ID: {item.get('id', 'Unknown')} from group ID: {group_id}")
+                await self.q_items.put(item)
+
+            self.q_groups.task_done()
 
 
     async def run(self):
@@ -236,9 +217,6 @@ class TradeitScraper:
             for _ in range(1):
                 tasks.append(asyncio.create_task(self.worker_image(session)))
             
-            await self.q_groups.join()
-            await self.q_items.join()
-            await self.q_images.join()
             
             # Send sentinel values to stop workers
             for _ in range(1):  # 1 group worker
@@ -248,17 +226,9 @@ class TradeitScraper:
             for _ in range(1):  # 1 image worker
                 await self.q_images.put(None)
 
-            # Wait for all workers to finish
-            try:
-                await asyncio.gather(*tasks, return_exceptions=True)
-            except Exception as e:
-                self.logger.error(f'Error in task gathering: {e}', exc_info=True)
-                for task in tasks:
-                    if not task.done():
-                        task.cancel()
-                # Wait for cancellation to complete
-                await asyncio.gather(*tasks, return_exceptions=True)
-            
+
+            await asyncio.gather(*tasks, return_exceptions=True)
+
             await self.db.close()
 
             

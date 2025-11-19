@@ -5,19 +5,33 @@ import os
 from aiohttp import ClientSession, ClientTimeout
 from dotenv import load_dotenv
 from asyncio import Task
-
-from typing import Dict, List
+from logging import Logger
+from typing import Dict, List, Any
 
 from scraper.database.SeenItemsDB import SeenDB
 
 
 class TradeitScraper:
-    def __init__(self, skin_min_price, skin_max_price, stickers_to_lookup, logger):
+    def __init__(
+            self,
+            stickers_to_lookup: list[str],
+            logger: Logger,
+            config: dict[str, Any]
+        ):
+
+        # Scraper setup
+
+        self.config = config
         self.start = 0
         self.limit = 120
-        self.skin_min_price = skin_min_price
-        self.skin_max_price = skin_max_price
+        self.skin_min_price = self.config['scraper']['skin_min_price']
+        self.skin_max_price = self.config['scraper']['skin_max_price']
         self.stickers_to_lookup = stickers_to_lookup
+        self.min_delay = self.config['scraper']['min_delay']
+        self.max_delay = self.config['scraper']['max_delay']
+
+        # Logger
+
         self.logger = logger
 
         # Env
@@ -32,16 +46,7 @@ class TradeitScraper:
 
         # Headers
 
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            #'Referer': 'https://google.com/',
-            'Connection': 'keep-alive',
-            #'Cache-Control': 'max-age=0',
-            #'Upgrade-Insecure-Requests': '1'
-        }
+        self.headers = self.config['scraper']['headers']
 
         # Asyncio
 
@@ -56,7 +61,7 @@ class TradeitScraper:
         self.db = SeenDB(path='SeenItems.db', logger=self.logger)
 
 
-    async def send_img_with_caption(self, session: ClientSession, img_path: str, message: str):
+    async def send_img_with_caption(self, session: ClientSession, img_path: str, message: str) -> None:
         await asyncio.sleep(random.uniform(0.3, 0.5))
         endpoint = 'sendMessage'
         payload = {
@@ -94,7 +99,7 @@ class TradeitScraper:
         return False
 
     async def fetch(self, session: ClientSession, url: str) -> Dict:
-        await asyncio.sleep(random.uniform(2, 4))
+        await asyncio.sleep(random.uniform(self.min_delay, self.max_delay))
         async with self.sem:
             try:
                 async with session.get(url, headers=self.headers, timeout=ClientTimeout(total=30)) as response:

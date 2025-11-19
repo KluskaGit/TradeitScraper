@@ -1,13 +1,13 @@
 import asyncio
+import logging
+import yaml
+
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
 from scraper.TradeitScraper import TradeitScraper
 
-import logging
-from logging.handlers import RotatingFileHandler
-
-if __name__ == "__main__":
-    minPrice = 5
-    maxPrice = 10
-
+def main()->None:
     # Logger
     handler = RotatingFileHandler(
         'logs.log',
@@ -23,7 +23,20 @@ if __name__ == "__main__":
     with open("stickers.txt", "r") as file:
         stickers_to_lookup = file.read().splitlines()
 
-    scraper = TradeitScraper(skin_min_price=minPrice, skin_max_price=maxPrice, stickers_to_lookup=stickers_to_lookup, logger=logger)
+    with open(Path('appconfig.yaml'), 'r') as cfg:
+        try:
+            config = yaml.safe_load(cfg)
+        except yaml.YAMLError as e:
+            logger.error(f'Error occured while reading config file: {e}')
+            raise yaml.YAMLError(e)
+
+    scraper = TradeitScraper(stickers_to_lookup=stickers_to_lookup, logger=logger, config=config)
     asyncio.run(scraper.run())
     logger.info('All tasks finished')
+
+
+
+if __name__ == "__main__":
+    main()
+
     

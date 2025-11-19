@@ -1,7 +1,9 @@
 scraper:
-  max_retries: 5
-  timeout: 10
-  delay_between_requests: 2
+  skin_min_price: 5
+  skin_max_price: 10
+
+  min_delay: 2
+  max_delay: 4
 
   headers:
     User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36
@@ -11,4 +13,4 @@ scraper:
     #Referer: https://google.com/
     Connection: keep-alive
     #Cache-Control: max-age=0
-    #Upgrade-Insecure-Requests: 1
+    Upgrade-Insecure-Requests: '1'

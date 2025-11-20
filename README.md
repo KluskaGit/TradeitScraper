@@ -87,6 +87,13 @@ TradeitScraper/
 └── logs.log               # Application logs
 ```
 
+## Results
+
+![s1](images/s1.png)
+![s2](images/s2.png)
+
+
 ## License
 
 This project is open source and available under the MIT License.
+

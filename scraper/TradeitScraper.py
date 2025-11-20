@@ -53,7 +53,7 @@ class TradeitScraper:
 
         self.q_groups = asyncio.Queue()
         self.q_items = asyncio.Queue()
-        self.q_images = asyncio.Queue()
+        self.q_alerts = asyncio.Queue()
 
         self.semaphore = asyncio.Semaphore(3)
 
@@ -66,18 +66,19 @@ class TradeitScraper:
 
     async def send_img_with_caption(self, session: ClientSession, img_path: str, message: str) -> None:
         await asyncio.sleep(random.uniform(0.3, 0.5))
-        endpoint = 'sendMessage'
-        payload = {
-            'chat_id': self.telegram_chat_id, 
-            'text': message, 
-            'parse_mode': 'HTML'}
-
+        
         if img_path:
             endpoint = 'sendPhoto'
             payload = {
                 'chat_id': self.telegram_chat_id,
                 'photo': img_path, 
                 'caption': message, 
+                'parse_mode': 'HTML'}
+        else:
+            endpoint = 'sendMessage'
+            payload = {
+                'chat_id': self.telegram_chat_id, 
+                'text': message, 
                 'parse_mode': 'HTML'}
 
         url = f'https://api.telegram.org/bot{self.telegram_token}/{endpoint}'
@@ -116,15 +117,15 @@ class TradeitScraper:
     
     async def worker_image(self, session: ClientSession):
         while True:
-            alert = await self.q_images.get()
+            alert = await self.q_alerts.get()
 
             if alert is None:
-                self.q_images.task_done()
+                self.q_alerts.task_done()
                 break
 
             await self.send_img_with_caption(session, alert['img'], alert['msg'])
 
-            self.q_images.task_done()
+            self.q_alerts.task_done()
 
 
 
@@ -158,7 +159,7 @@ class TradeitScraper:
                     self.logger.info(f"No image data found for item ID {id}")
                 image_path = image_data.get('front', 'No image found')
                 alert = {'img': image_path, 'msg': msg}  
-                await self.q_images.put(alert)
+                await self.q_alerts.put(alert)
                 await self.db.add_item(id)
 
             self.q_items.task_done()
@@ -214,22 +215,27 @@ class TradeitScraper:
             # TODO
             # optimize number of workers to the min/max price
             ##########
-            for _ in range(1):
+
+            n_group_tasks = 1
+            n_items_tasks = 4
+            n_image_tasks = 1
+
+            for _ in range(n_group_tasks):
                 tasks.append(asyncio.create_task(self.worker_group(session)))
 
-            for _ in range(4):
+            for _ in range(n_items_tasks):
                 tasks.append(asyncio.create_task(self.worker_item(session)))
-            for _ in range(1):
+            for _ in range(n_image_tasks):
                 tasks.append(asyncio.create_task(self.worker_image(session)))
             
             
             # Send sentinel values to stop workers
-            for _ in range(1):  # 1 group worker
+            for _ in range(n_group_tasks):
                 await self.q_groups.put(None)
-            for _ in range(4):  # 4 item workers
+            for _ in range(n_items_tasks):
                 await self.q_items.put(None)
-            for _ in range(1):  # 1 image worker
-                await self.q_images.put(None)
+            for _ in range(n_image_tasks):
+                await self.q_alerts.put(None)
 
 
             await asyncio.gather(*tasks, return_exceptions=True)
